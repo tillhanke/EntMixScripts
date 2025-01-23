@@ -1,0 +1,95 @@
+#!/usr/bin/env julia
+#
+# this script can be used to strip certain steps from a trajectory file 
+#
+using EntMix
+using ArgParse
+
+function write_step(file, outfile)
+    head = EntMix.read_lammpstrj_head(file)
+    global ffstep 
+    global dts
+    approx_b = position(trajfile)÷((head["timestep"]-ffstep)÷dts)
+    for i in 1:head["n_atoms"]+9
+        write(outfile, readline(file) * "\n")   
+    end
+    return approx_b
+end
+
+argparser = ArgParseSettings()
+@add_arg_table! argparser begin
+    "--laststep", "-l"
+        help="last step to save"
+        default=nothing
+        arg_type=Int
+    "--startstep", "-s"
+        help="First step to save"
+        default=nothing
+        arg_type=Int
+    "--skip", "-k"
+        help="Number of steps to skip inbetween. (e.g. if 5 then only start, start+5, start+10, ...) will be written to output"
+        default=nothing
+        arg_type=Int    
+    "--outfile", "-o"
+        help="Output file, to save the stripped trajectory"
+    "--debug", "-v"
+        help="Print debug information"
+        action="store_true"
+    "trajfile"
+        help="input trajectory file"
+        required=true
+        arg_type=String
+end    
+
+args = parse_args(argparser)
+if args["debug"]
+    ENV["JULIA_DEBUG"] = "EntMix,Main"
+end
+
+trajfile = open(args["trajfile"], "r")
+if args["outfile"] != nothing
+    outfile = open(args["outfile"], "w")
+else
+    outfile = open(trajfile+".stripped", "w")
+end
+
+head = EntMix.read_lammpstrj_head(trajfile)
+
+for i in 1:head["n_atoms"]+9
+    readline(trajfile)
+end
+approx_b = position(trajfile)
+secondhead = EntMix.read_lammpstrj_head(trajfile)
+dts = secondhead["timestep"] - head["timestep"]
+ffstep = head["timestep"]
+if args["skip"] != nothing
+    @assert args["skip"] > dts "The timestep difference between the first two steps is $dts, but you specified a skipping of $(args["skip"]) which is less"
+    @assert args["skip"] % dts == 0 "The timestep difference between the first two steps is $dts, but you specified a skipping of $(args["skip"]) which is not a multiple of the timestep difference"
+else
+    args["skip"] = dts
+end
+
+if args["startstep"] != nothing
+    start = args["startstep"]
+    EntMix.find_lammpstrj_timestep(trajfile, start;delts=dts, approx_byte=approx_b)
+    head = EntMix.read_lammpstrj_head(trajfile)
+    approx_b = position(trajfile)÷((head["timestep"]-ffstep)÷dts)
+else
+    seekstart(trajfile)
+    start = head["timestep"]
+end
+if args["laststep"] != nothing
+    laststep = args["laststep"]
+else
+    laststep,  = EntMix.seekend_lammpstrj(trajfile)
+end
+currentstep = head["timestep"]
+@debug "Starting at step $currentstep"
+
+while currentstep <= laststep && !eof(trajfile)
+    global approx_b
+    EntMix.find_lammpstrj_timestep(trajfile, currentstep;delts=dts, approx_byte=approx_b, savety=1)
+    approx_b = write_step(trajfile, outfile)
+    @debug "Wrote step $currentstep"
+    global currentstep += args["skip"]
+end
