@@ -25,6 +25,10 @@ argparser = ArgParseSettings()
         help="Initial step to use default to first step in file"
         default=nothing
         arg_type=Int
+    "--nthstep" 
+        help="Only use every nth step"
+        default=nothing
+        arg_type=Int
     "--densfunc", "-d" 
         help="Function to use for smearing. Available options are: slater, gaus"
         default="slater"
@@ -79,12 +83,13 @@ n_atoms = args["amatoms"]
 maxstep = args["maxstep"]
 startstep = args["startstep"]
 outfile = args["outfile"]
+nth = args["nthstep"]
 if args["densfunc"] == "slater"
     dfunc = EntMix.slater
 elseif args["densfunc"] == "gaus"
     dfunc = EntMix.gaus
-elseif args["densfunc"] == "rect"
-    dfunc = EntMix.rect
+# elseif args["densfunc"] == "rect"
+#     dfunc = EntMix.rect
 else
     println("Invalid density function")
     exit(1)
@@ -112,7 +117,16 @@ end
 
 # run Main function
 if trajtype == "lammpstrj"
-    EntMix.lammpstrj_entropy(file, n_atoms, maxstep, startstep; radial_factor=radial_factor, dfunc=dfunc, outfile=outfile, na1=molnorm[1], na2=molnorm[2])
+    EntMix.lammpstrj_entropy(
+                             file, 
+                             n_atoms; 
+                             maxstep=maxstep, 
+                             startstep=startstep, 
+                             radial_factor=radial_factor, 
+                             dfunc=dfunc, 
+                             outfile=outfile, 
+                             na1=molnorm[1], na2=molnorm[2], 
+                             nth=nth)
 elseif trajtype == "xyz"
     EntMix.xyz_entropy(file, n_atoms, maxstep, startstep; radial_factor=radial_factor, dfunc=dfunc, na1=molnorm[1], na2=molnorm[2])
 end
