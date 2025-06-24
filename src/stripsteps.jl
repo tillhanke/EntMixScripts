@@ -2,11 +2,11 @@
 #
 # this script can be used to strip certain steps from a trajectory file 
 #
-using EntMix
+include("lammpstrj_parser.jl")
 using ArgParse
 
 function write_step(file, outfile)
-    head = EntMix.read_lammpstrj_head(file)
+    head = read_lammpstrj_head(file)
     global ffstep 
     global dts
     approx_b = position(trajfile)÷((head["timestep"]-ffstep)÷dts)
@@ -19,7 +19,7 @@ end
 argparser = ArgParseSettings()
 @add_arg_table! argparser begin
     "--laststep", "-l"
-        help="last step to save"
+        help="last step to save defaults to the last step in the file"
         default=nothing
         arg_type=Int
     "--startstep", "-s"
@@ -30,6 +30,10 @@ argparser = ArgParseSettings()
         help="Number of steps to skip inbetween. (e.g. if 5 then only start, start+5, start+10, ...) will be written to output"
         default=nothing
         arg_type=Int    
+    "--nsteps", "-n"
+        help="Number of steps to write, starting from startstep. Overwrites --laststep. If not given, all steps until --laststep will be written"
+        default=nothing
+        arg_type=Int
     "--outfile", "-o"
         help="Output file, to save the stripped trajectory"
     "--debug", "-v"
@@ -47,19 +51,19 @@ if args["debug"]
 end
 
 trajfile = open(args["trajfile"], "r")
-if args["outfile"] != nothing
+if !isnothing(args["outfile"])
     outfile = open(args["outfile"], "w")
 else
-    outfile = open(trajfile+".stripped", "w")
+    outfile = open(args["trajfile"]*".stripped", "w")
 end
 
-head = EntMix.read_lammpstrj_head(trajfile)
+head = read_lammpstrj_head(trajfile)
 
 for i in 1:head["n_atoms"]+9
     readline(trajfile)
 end
 approx_b = position(trajfile)
-secondhead = EntMix.read_lammpstrj_head(trajfile)
+secondhead = read_lammpstrj_head(trajfile)
 dts = secondhead["timestep"] - head["timestep"]
 ffstep = head["timestep"]
 if args["skip"] != nothing
@@ -71,8 +75,8 @@ end
 
 if args["startstep"] != nothing
     start = args["startstep"]
-    EntMix.find_lammpstrj_timestep(trajfile, start;delts=dts, approx_byte=approx_b)
-    head = EntMix.read_lammpstrj_head(trajfile)
+    find_lammpstrj_timestep(trajfile, start;delts=dts, approx_byte=approx_b)
+    head = read_lammpstrj_head(trajfile)
     approx_b = position(trajfile)÷((head["timestep"]-ffstep)÷dts)
 else
     seekstart(trajfile)
@@ -81,15 +85,22 @@ end
 if args["laststep"] != nothing
     laststep = args["laststep"]
 else
-    laststep,  = EntMix.seekend_lammpstrj(trajfile)
+    laststep,  = seekend_lammpstrj(trajfile)
 end
 currentstep = head["timestep"]
 @debug "Starting at step $currentstep"
-
+writtensteps = 0
 while currentstep <= laststep && !eof(trajfile)
     global approx_b
-    EntMix.find_lammpstrj_timestep(trajfile, currentstep;delts=dts, approx_byte=approx_b, savety=1)
+    find_lammpstrj_timestep(trajfile, currentstep;delts=dts, approx_byte=approx_b, savety=1)
     approx_b = write_step(trajfile, outfile)
     @debug "Wrote step $currentstep"
     global currentstep += args["skip"]
+    global writtensteps += 1
+    if args["nsteps"] != nothing && writtensteps >= args["nsteps"]
+        @debug "Reached the number of steps to write, stopping"
+        break
+    end
 end
+close(trajfile)
+close(outfile)
