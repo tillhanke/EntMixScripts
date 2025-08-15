@@ -65,6 +65,7 @@ end
 approx_b = position(trajfile)
 secondhead = read_lammpstrj_head(trajfile)
 dts = secondhead["timestep"] - head["timestep"]
+maxstep = seekend_lammpstrj(trajfile)
 ffstep = head["timestep"]
 if args["skip"] != nothing
     @assert args["skip"] > dts "The timestep difference between the first two steps is $dts, but you specified a skipping of $(args["skip"]) which is less"
@@ -75,9 +76,6 @@ end
 
 if args["startstep"] != nothing
     start = args["startstep"]
-    find_lammpstrj_timestep(trajfile, start;delts=dts, approx_byte=approx_b)
-    head = read_lammpstrj_head(trajfile)
-    approx_b = position(trajfile)÷((head["timestep"]-ffstep)÷dts)
 else
     seekstart(trajfile)
     start = head["timestep"]
@@ -85,8 +83,19 @@ end
 if args["laststep"] != nothing
     laststep = args["laststep"]
 else
-    laststep,  = seekend_lammpstrj(trajfile)
+    laststep,  = maxstep
 end
+if laststep < 0
+    laststep = maxstep + laststep
+end
+if start < 0
+    start = maxstep + start
+end
+
+find_lammpstrj_timestep(trajfile, start;delts=dts, approx_byte=approx_b)
+head = read_lammpstrj_head(trajfile)
+approx_b = position(trajfile)÷((head["timestep"]-ffstep)÷dts)
+
 currentstep = head["timestep"]
 @debug "Starting at step $currentstep"
 writtensteps = 0
