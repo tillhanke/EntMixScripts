@@ -83,5 +83,13 @@ function main()
         @lock entro_lock push!(entropies, entropy_val)
         @debug entropies[end]
     end
+    if args["outfile"] != ""
+        writedlm(args["outfile"], sort(entropies, by=x->x[1]))
+    else
+        for ent in sort(entropies, by=x->x[1])
+            println(join(ent, ", "))
+        end
+    end
 end
 @time main()
+
