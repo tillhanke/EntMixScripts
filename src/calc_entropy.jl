@@ -58,7 +58,7 @@ function main()
         $(join(keys(moltypes), "\n"))"""
 
     @info "Calculating mixing entropy between these molecules"
-    maxstep = length(trajectory)
+    maxstep = length(trajectory) -1
     if args["endstep"] < maxstep 
         maxstep = args["endstep"] 
     end
