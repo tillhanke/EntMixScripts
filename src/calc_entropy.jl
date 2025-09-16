@@ -4,7 +4,7 @@ using EntMix
 import Chemfiles
 using ArgParse
 using Base.Threads
-using DelimitedFiles
+# using DelimitedFiles
 
 argparser = ArgParseSettings()
 @add_arg_table! argparser begin
@@ -35,6 +35,9 @@ argparser = ArgParseSettings()
         help="Output file to write results to (default stdout)"
         default=""
         arg_type=String
+    "--append", "-a"
+        help="Append to outfile"
+        action="store_true"
     "trajfile"
         help="trajectory file to use."
         required=true
@@ -78,13 +81,31 @@ function main()
                 Molecule.type_from_name!(frame)
             end
         end
-        atom_coll = [reduce(vcat, moltypes[key]) for key in keys(moltypes)]
-        entropy_val = [stepid, EntMix.entropy(frame, atom_coll, args["sigma"]; baselength=args["sigmatype"])]
+        atom_coll = [reduce(vcat, [mols[mid] for mid in moltypes[key]]) for key in keys(moltypes)]
+        entropy_val = [stepid, EntMix.entropy(
+                                              frame, 
+                                              atom_coll, 
+                                              args["sigma"]; 
+                                              baselength=args["sigmatype"]
+                                             )]
         @lock entro_lock push!(entropies, entropy_val)
         @debug entropies[end]
     end
     if args["outfile"] != ""
-        writedlm(args["outfile"], sort(entropies, by=x->x[1]))
+        if args["append"]
+            open(args["outfile"], "a") do io
+            for ent in sort(entropies, by=x->x[1])
+                println(io, join(ent, ", "))
+            end
+            end
+        else
+            open(args["outfile"], "w") do io
+            for ent in sort(entropies, by=x->x[1])
+                println(io, join(ent, ", "))
+            end
+            end
+        end
+        # writedlm(args["outfile"], sort(entropies, by=x->x[1]))
     else
         for ent in sort(entropies, by=x->x[1])
             println(join(ent, ", "))
