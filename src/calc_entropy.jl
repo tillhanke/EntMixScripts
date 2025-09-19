@@ -57,6 +57,8 @@ function main()
     end
     mols = Molecule.get_molecules(firstframe)
     moltypes = Molecule.mol_types(firstframe, mols)
+    natoms = [length(mols[moltypes[key][1]]) for key in keys(moltypes)]
+    @debug "Number of atoms per molecule type: $(natoms)"
     @info """Detected $(length(moltypes)) molecule types:
         $(join(keys(moltypes), "\n"))"""
 
@@ -71,11 +73,16 @@ function main()
         startstep = 0
     end
     entropies = Vector{Vector{Float64}}()
-    traj_lock = ReentrantLock()
+    # traj_lock = ReentrantLock()
     entro_lock = ReentrantLock()
-    frame = nothing
-    @threads for stepid in startstep:args["stepinterval"]:maxstep
-        @lock traj_lock frame = Chemfiles.read_step(trajectory, stepid)
+    # frame = nothing
+    stepids = startstep:args["stepinterval"]:maxstep
+    frames = [Chemfiles.read_step(trajectory, stepid) for stepid in stepids]
+    @debug "type of first frames entry: $(typeof(frames[1]))"
+    @threads for id in eachindex(frames) 
+        # @lock traj_lock frame = Chemfiles.read_step(trajectory, stepid)
+        frame = frames[id]
+        stepid = stepids[id]
         if args["sigmatype"] != "homo"
             if Chemfiles.type(frame[1]) == ""
                 Molecule.type_from_name!(frame)
@@ -86,8 +93,10 @@ function main()
                                               frame, 
                                               atom_coll, 
                                               args["sigma"]; 
-                                              baselength=args["sigmatype"]
+                                              baselength=args["sigmatype"],
+                                              natoms=natoms
                                              )]
+        @debug "first atom position: $(Chemfiles.positions(frame)[:,1])"
         @lock entro_lock push!(entropies, entropy_val)
         @debug entropies[end]
     end
