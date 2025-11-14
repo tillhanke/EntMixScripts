@@ -35,6 +35,10 @@ argparser = ArgParseSettings()
         help="Output file to write results to (default stdout)"
         default=""
         arg_type=String
+    "--boxlengths", "-b"
+        help="The lengths of your periodic box (e.g. 2.5,1.2,6.3). This code only uses orthogonal boxes. only used if not present in trajfile"
+        default=""
+        arg_type=String
     "--append", "-a"
         help="Append to outfile"
         action="store_true"
@@ -52,6 +56,15 @@ end
 function main()
     trajectory = Chemfiles.Trajectory(args["trajfile"])
     firstframe = read(trajectory)
+    c_box = args["boxlengths"]
+    if c_box != "" 
+        if Chemfiles.lengths(Chemfiles.UnitCell(firstframe)) ==  [0., 0., 0.]
+            box = parse.(Float64, split(c_box, ','))
+            cell = Chemfiles.UnitCell(box)
+            Chemfiles.set_cell!(trajectory, cell)
+        end
+    end
+
     if Chemfiles.type(firstframe[1]) == "" 
         Molecule.type_from_name!(firstframe)
     end
