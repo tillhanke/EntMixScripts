@@ -76,6 +76,9 @@ end
 
 if args["startstep"] != nothing
     start = args["startstep"]
+    if start == -1
+        start, = maxstep
+    end
 else
     seekstart(trajfile)
     start = head["timestep"]
