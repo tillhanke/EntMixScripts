@@ -66,10 +66,10 @@ function main()
     end
 
     if Chemfiles.type(firstframe[1]) == "" 
-        Molecule.type_from_name!(firstframe)
+        Molecules.type_from_name!(firstframe)
     end
-    mols = Molecule.get_molecules(firstframe)
-    moltypes = Molecule.mol_types(firstframe, mols)
+    mols = Molecules.get_molecules(firstframe)
+    moltypes = Molecules.mol_types(firstframe, mols)
     natoms = [length(mols[moltypes[key][1]]) for key in keys(moltypes)]
     @debug "Number of atoms per molecule type: $(natoms)"
     @info """Detected $(length(moltypes)) molecule types:
@@ -90,15 +90,22 @@ function main()
     entro_lock = ReentrantLock()
     # frame = nothing
     stepids = startstep:args["stepinterval"]:maxstep
+    @debug "Reading the following stepids (chemfilenotation): $(stepids)"
     frames = [Chemfiles.read_step(trajectory, stepid) for stepid in stepids]
     @debug "type of first frames entry: $(typeof(frames[1]))"
+    @debug "Box size of first frame: $(Chemfiles.lengths(Chemfiles.UnitCell(frames[1])))"
+    if prod(Chemfiles.lengths(Chemfiles.UnitCell(frames[1]))) == 0
+        @error "No Unit Cell is set for the first frame"
+        exit(2)
+    end
+
     @threads for id in eachindex(frames) 
         # @lock traj_lock frame = Chemfiles.read_step(trajectory, stepid)
         frame = frames[id]
         stepid = stepids[id]
         if args["sigmatype"] != "homo"
             if Chemfiles.type(frame[1]) == ""
-                Molecule.type_from_name!(frame)
+                Molecules.type_from_name!(frame)
             end
         end
         atom_coll = [reduce(vcat, [mols[mid] for mid in moltypes[key]]) for key in keys(moltypes)]
