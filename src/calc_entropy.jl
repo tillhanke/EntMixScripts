@@ -31,6 +31,10 @@ argparser = ArgParseSettings()
         help="Type of sigma to use: *homo, VDW, Covalent"
         default="homo"
         arg_type=String
+    "--smearfunc"
+        help="The type of smearing function to be used for density calculations. \nOptions are: gaus,slater,const,linear,epanechnikov,cubicspline,wendland,gengaus,cosine"
+        default="gaus"
+        arg_type=String
     "--outfile", "-o"
         help="Output file to write results to (default stdout)"
         default=""
@@ -53,6 +57,31 @@ if args["debug"]
     ENV["JULIA_DEBUG"] = "EntMix,Main"
 end
 
+function parse_func(func_string)
+    if func_string == "slater"
+        return EntMix.slater
+    elseif func_string == "gaus"
+        return EntMix.gaus
+    elseif func_string == "const"
+        return EntMix.constant
+    elseif func_string == "linear"
+        return EntMix.linear
+    elseif func_string == "epanechnikov"
+        return EntMix.epanechnikov
+    elseif func_string == "cubicspline"
+        return EntMix.cubicspline
+    elseif func_string == "wendland"
+        return EntMix.wendland
+    elseif func_string == "gengaus"
+        return EntMix.gengauss
+    elseif func_string == "cosine"
+        return EntMix.cosine
+    else
+        @error func_string " is not a valid smearing function"
+        exit(2)
+    end
+end
+
 function main()
     trajectory = Chemfiles.Trajectory(args["trajfile"])
     firstframe = read(trajectory)
@@ -66,10 +95,10 @@ function main()
     end
 
     if Chemfiles.type(firstframe[1]) == "" 
-        Molecules.type_from_name!(firstframe)
+        Molecule.type_from_name!(firstframe)
     end
-    mols = Molecules.get_molecules(firstframe)
-    moltypes = Molecules.mol_types(firstframe, mols)
+    mols = Molecule.get_molecules(firstframe)
+    moltypes = Molecule.mol_types(firstframe, mols)
     natoms = [length(mols[moltypes[key][1]]) for key in keys(moltypes)]
     @debug "Number of atoms per molecule type: $(natoms)"
     @info """Detected $(length(moltypes)) molecule types:
@@ -105,7 +134,7 @@ function main()
         stepid = stepids[id]
         if args["sigmatype"] != "homo"
             if Chemfiles.type(frame[1]) == ""
-                Molecules.type_from_name!(frame)
+                Molecule.type_from_name!(frame)
             end
         end
         atom_coll = [reduce(vcat, [mols[mid] for mid in moltypes[key]]) for key in keys(moltypes)]
@@ -114,6 +143,7 @@ function main()
                                               atom_coll, 
                                               args["sigma"]; 
                                               baselength=args["sigmatype"],
+                                              dfunc=parse_func(args["smearfunc"]),
                                               natoms=natoms
                                              )]
         @debug "first atom position: $(Chemfiles.positions(frame)[:,1])"
